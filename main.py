@@ -23,7 +23,7 @@ INTERVALO_ICONES = 3600  # 1 hora
 NOME_CANAL_ALVO = "icons-aleatorios"
 
 # IDs para conexão automática (Substitua pelos IDs Reais do seu Discord)
-# Usando int() em strings para evitar erro de zeros à esquerda no Python
+# Usando int("ID") para evitar o SyntaxError de zeros à esquerda no Python
 ID_SERVIDOR = int("1234567890") 
 ID_CANAL_VOZ = int("987654321")
 
@@ -68,7 +68,7 @@ class MyBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Inicia os loops automáticos
+        # Inicia os loops automáticos de ícones e conexão de voz
         self.enviar_icones_loop.start()
         self.connect_to_voice_channel.start()
 
@@ -82,13 +82,12 @@ class MyBot(commands.Bot):
             guild = self.get_guild(ID_SERVIDOR)
             if guild:
                 channel = guild.get_channel(ID_CANAL_VOZ)
-                # Verifica se o bot já não está conectado
+                # Verifica se o bot já não está conectado em algum canal de voz
                 if not discord.utils.get(self.voice_clients, guild=guild):
                     if channel:
                         await channel.connect()
                         print(f"🎙️ Conectado automaticamente ao canal: {channel.name}")
         except Exception as e:
-            # CORRIGIDO: Chave fechada corretamente abaixo
             print(f"Erro ao tentar conexão automática de voz: {e}")
 
     @connect_to_voice_channel.before_loop
@@ -121,7 +120,7 @@ class MyBot(commands.Bot):
     async def before_icones_loop(self):
         await self.wait_until_ready()
 
-    # --- COMANDOS DE MÚSICA ---
+    # --- COMANDOS DE MÚSICA (DENTRO DA CLASSE) ---
     @commands.command()
     async def play(self, ctx, *, search):
         if not ctx.author.voice:
@@ -151,6 +150,7 @@ class MyBot(commands.Bot):
 
 # --- INICIALIZAÇÃO ---
 if __name__ == "__main__":
+    # Roda o servidor Keep Alive em uma thread separada
     threading.Thread(target=keep_alive, daemon=True).start()
     
     if TOKEN:
