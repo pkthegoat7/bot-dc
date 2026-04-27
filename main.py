@@ -5,10 +5,14 @@ import random
 import yt_dlp
 import asyncio
 from supabase import create_client
-# Importações para o Keep Alive (Essencial para o Render)
+# Importações para o Keep Alive e carregar .env
 import http.server
 import socketserver
 import threading
+from dotenv import load_dotenv
+
+# Carrega as variáveis do arquivo .env (se ele existir localmente)
+load_dotenv()
 
 # --- CONFIGURAÇÕES ---
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -19,7 +23,7 @@ BUCKET_NAME = "bot-icons"
 INTERVALO_ICONES = 3600  # Envia um ícone a cada 1 hora
 NOME_CANAL_ALVO = "icons-aleatorios"
 
-# --- SISTEMA KEEP ALIVE ---
+# --- SISTEMA KEEP ALIVE (PARA O RENDER) ---
 def keep_alive():
     """Cria um servidor web simples para o Render não dar timeout no bot."""
     port = int(os.environ.get("PORT", 8080))
@@ -32,7 +36,11 @@ def keep_alive():
         print(f"Erro no Keep Alive: {e}")
 
 # --- CONEXÃO SUPABASE ---
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Só tenta conectar se as variáveis existirem, para evitar erro de inicialização
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    print("❌ Erro: SUPABASE_URL ou SUPABASE_KEY não configurados!")
 
 # --- CONFIGURAÇÃO MÚSICA ---
 ytdl_format_options = {
@@ -93,7 +101,7 @@ class MyBot(commands.Bot):
     async def before_icones_loop(self):
         await self.wait_until_ready()
 
-    # --- COMANDOS ---
+    # --- COMANDOS DE MÚSICA ---
     @commands.command()
     async def play(self, ctx, *, search):
         if not ctx.author.voice:
@@ -118,10 +126,14 @@ class MyBot(commands.Bot):
             await ctx.voice_client.disconnect()
             await ctx.send("Parou!")
 
-# --- START ---
+# --- INICIALIZAÇÃO ---
 if __name__ == "__main__":
-    # Roda o servidor Keep Alive em uma thread separada
+    # 1. Roda o servidor Keep Alive em uma thread separada para o Render
     threading.Thread(target=keep_alive, daemon=True).start()
     
-    bot = MyBot()
-    bot.run(TOKEN)
+    # 2. Inicia o Bot (garantindo que o token existe)
+    if TOKEN:
+        bot = MyBot()
+        bot.run(TOKEN)
+    else:
+        print("❌ Erro: DISCORD_TOKEN não encontrado! Verifique seu arquivo .env ou o painel do Render.")
