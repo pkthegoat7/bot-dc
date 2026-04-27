@@ -22,8 +22,7 @@ BUCKET_NAME = "bot-icons"
 INTERVALO_ICONES = 3600  # 1 hora
 NOME_CANAL_ALVO = "icons-aleatorios"
 
-# IDs para conexão automática (Substitua pelos IDs Reais do seu Discord)
-# Usando int("ID") para evitar o SyntaxError de zeros à esquerda no Python
+# IDs para conexão automática (Certifique-se de usar os IDs reais do seu servidor)
 ID_SERVIDOR = int("1234567890") 
 ID_CANAL_VOZ = int("987654321")
 
@@ -82,7 +81,6 @@ class MyBot(commands.Bot):
             guild = self.get_guild(ID_SERVIDOR)
             if guild:
                 channel = guild.get_channel(ID_CANAL_VOZ)
-                # Verifica se o bot já não está conectado em algum canal de voz
                 if not discord.utils.get(self.voice_clients, guild=guild):
                     if channel:
                         await channel.connect()
@@ -120,8 +118,8 @@ class MyBot(commands.Bot):
     async def before_icones_loop(self):
         await self.wait_until_ready()
 
-    # --- COMANDOS DE MÚSICA (DENTRO DA CLASSE) ---
-    @commands.command()
+    # --- COMANDOS DE MÚSICA ---
+    @commands.command(name="play")
     async def play(self, ctx, *, search):
         if not ctx.author.voice:
             return await ctx.send("Entra num canal de voz primeiro!")
@@ -142,15 +140,15 @@ class MyBot(commands.Bot):
             ctx.voice_client.play(discord.FFmpegPCMAudio(data['url'], **ffmpeg_options))
             await ctx.send(f'🎶 Tocando agora: **{data["title"]}**')
 
-    @commands.command()
+    @commands.command(name="stop")
     async def stop(self, ctx):
         if ctx.voice_client:
             await ctx.voice_client.disconnect()
-            await ctx.send("Desconectado!")
+            await ctx.send("Parou e desconectou!")
 
 # --- INICIALIZAÇÃO ---
 if __name__ == "__main__":
-    # Roda o servidor Keep Alive em uma thread separada
+    # Roda o servidor Keep Alive para o Render
     threading.Thread(target=keep_alive, daemon=True).start()
     
     if TOKEN:
