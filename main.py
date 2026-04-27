@@ -5,13 +5,12 @@ import random
 import yt_dlp
 import asyncio
 from supabase import create_client
-# Importações para o Keep Alive e carregar .env
 import http.server
 import socketserver
 import threading
 from dotenv import load_dotenv
 
-# Carrega as variáveis do arquivo .env (se ele existir localmente)
+# Carrega as variáveis do arquivo .env
 load_dotenv()
 
 # --- CONFIGURAÇÕES ---
@@ -20,12 +19,16 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 BUCKET_NAME = "bot-icons"
 
-INTERVALO_ICONES = 3600  # Envia um ícone a cada 1 hora
+INTERVALO_ICONES = 3600  # 1 hora
 NOME_CANAL_ALVO = "icons-aleatorios"
+
+# IDs para conexão automática (Substitua pelos IDs Reais do seu Discord)
+# Usando int() em strings para evitar erro de zeros à esquerda no Python
+ID_SERVIDOR = int("1234567890") 
+ID_CANAL_VOZ = int("987654321")
 
 # --- SISTEMA KEEP ALIVE (PARA O RENDER) ---
 def keep_alive():
-    """Cria um servidor web simples para o Render não dar timeout no bot."""
     port = int(os.environ.get("PORT", 8080))
     handler = http.server.SimpleHTTPRequestHandler
     try:
@@ -36,7 +39,6 @@ def keep_alive():
         print(f"Erro no Keep Alive: {e}")
 
 # --- CONEXÃO SUPABASE ---
-# Só tenta conectar se as variáveis existirem, para evitar erro de inicialização
 if SUPABASE_URL and SUPABASE_KEY:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 else:
@@ -66,27 +68,45 @@ class MyBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Inicia o loop automático de ícones
+        # Inicia os loops automáticos
         self.enviar_icones_loop.start()
+        self.connect_to_voice_channel.start()
 
     async def on_ready(self):
         print(f'✅ Bot online como {self.user.name}')
 
-    # --- LOOP DE ÍCONES ---
+    # --- LOOP DE CONEXÃO AUTOMÁTICA EM VOZ ---
+    @tasks.loop(minutes=2)
+    async def connect_to_voice_channel(self):
+        try:
+            guild = self.get_guild(ID_SERVIDOR)
+            if guild:
+                channel = guild.get_channel(ID_CANAL_VOZ)
+                # Verifica se o bot já não está conectado
+                if not discord.utils.get(self.voice_clients, guild=guild):
+                    if channel:
+                        await channel.connect()
+                        print(f"🎙️ Conectado automaticamente ao canal: {channel.name}")
+        except Exception as e:
+            # CORRIGIDO: Chave fechada corretamente abaixo
+            print(f"Erro ao tentar conexão automática de voz: {e}")
+
+    @connect_to_voice_channel.before_loop
+    async def before_voice_loop(self):
+        await self.wait_until_ready()
+
+    # --- LOOP DE ÍCONES (SUPABASE) ---
     @tasks.loop(seconds=INTERVALO_ICONES)
     async def enviar_icones_loop(self):
         try:
-            # Lista arquivos no bucket do Supabase
             res = supabase.storage.from_(BUCKET_NAME).list(options={'limit': 5000})
             if not res:
                 return
 
-            # Escolhe uma foto aleatória
             foto_info = random.choice(res)
             foto_nome = foto_info['name']
             url_publica = supabase.storage.from_(BUCKET_NAME).get_public_url(foto_nome)
 
-            # Envia para o canal 'icons-aleatorios' em todos os servidores
             for guild in self.guilds:
                 channel = discord.utils.get(guild.text_channels, name=NOME_CANAL_ALVO)
                 if channel:
@@ -117,6 +137,9 @@ class MyBot(commands.Bot):
             if 'entries' in data:
                 data = data['entries'][0]
 
+            if ctx.voice_client.is_playing():
+                ctx.voice_client.stop()
+
             ctx.voice_client.play(discord.FFmpegPCMAudio(data['url'], **ffmpeg_options))
             await ctx.send(f'🎶 Tocando agora: **{data["title"]}**')
 
@@ -124,16 +147,14 @@ class MyBot(commands.Bot):
     async def stop(self, ctx):
         if ctx.voice_client:
             await ctx.voice_client.disconnect()
-            await ctx.send("Parou!")
+            await ctx.send("Desconectado!")
 
 # --- INICIALIZAÇÃO ---
 if __name__ == "__main__":
-    # 1. Roda o servidor Keep Alive em uma thread separada para o Render
     threading.Thread(target=keep_alive, daemon=True).start()
     
-    # 2. Inicia o Bot (garantindo que o token existe)
     if TOKEN:
         bot = MyBot()
         bot.run(TOKEN)
     else:
-        print("❌ Erro: DISCORD_TOKEN não encontrado! Verifique seu arquivo .env ou o painel do Render.")
+        print("❌ Erro: DISCORD_TOKEN não encontrado!")
